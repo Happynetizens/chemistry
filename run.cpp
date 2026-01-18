@@ -67,9 +67,9 @@ inline int getX(string &name){
 }
 inline short get_element(string &eqn, short start, vector<short> &output){
 	short i=start;
-	for(string temp; eqn[i] && eqn[i]!='='; ++i){
+	for(string temp; eqn[i] && eqn[i]!='='; ++i){		// 目前是读原子，后续要改为分子......
 		if(isupper(eqn[i]) && isupper(eqn[i+1])) temp=eqn[i];
-		else temp=eqn[i]+eqn[i+1];
+		else temp=eqn[i]+eqn[i+1];		// Err......
 		output.push_back(getX(temp));
 	}
 	output.erase(std::unique(output.begin(), output.end()), output.end());
