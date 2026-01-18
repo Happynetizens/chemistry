@@ -1,0 +1,128 @@
+# ========== 工作流名称 ==========
+# 自定义名称，在 GitHub Actions 页面显示
+name: C++14 Build (GCC/Clang + Windows .exe) - run.cpp Only
+
+# ========== 触发条件 ==========
+# 仅在代码 push 到 main 分支时触发该工作流
+on:
+  push:
+    branches: [ "main" ]  # 触发分支：main
+    # 可选：限定只有 run.cpp 变更时才触发，减少无效编译
+    paths: [ "run.cpp" ]
+
+# ========== 定义任务 ==========
+# jobs 下是要执行的任务集合，这里分 Linux 和 Windows 两个独立任务
+jobs:
+  # ---------- 任务1：Linux 平台编译（GCC + Clang 双编译器） ----------
+  linux-build:
+    # 指定运行环境：最新版 Ubuntu 系统
+    runs-on: ubuntu-latest
+    # 构建矩阵：同时用 gcc 和 clang 编译，生成两个可执行文件
+    strategy:
+      # 一个编译器失败，不终止另一个的编译（便于对比问题）
+      fail-fast: false
+      matrix:
+        # 要测试的编译器列表
+        compiler: [gcc, clang]
+
+    # ========== Linux 任务步骤（按顺序执行） ==========
+    steps:
+      # 步骤1：检出仓库代码到虚拟机
+      - name: Step 1 - Checkout repository code
+        # 使用官方的检出动作，v4 是稳定版本
+        uses: actions/checkout@v4
+        # 作用：把 GitHub 仓库的代码下载到运行环境的本地目录
+
+      # 步骤2：安装编译依赖工具
+      - name: Step 2 - Install build tools (GCC/Clang)
+        # run 关键字后是要执行的 shell 命令
+        run: |
+          # 更新 Ubuntu 软件源列表（确保能下载到最新工具）
+          sudo apt update -y
+          # 安装编译必需的工具：
+          # build-essential: 包含 make、gcc 基础依赖
+          # gcc: GNU C++ 编译器
+          # clang: LLVM 编译器
+          sudo apt install -y build-essential gcc clang
+        # 作用：确保系统有 GCC 和 Clang 编译器
+
+      # 步骤3：使用指定编译器编译 run.cpp
+      - name: Step 3 - Compile run.cpp with ${{ matrix.compiler }}
+        run: |
+          # 根据 matrix 中的编译器，选择对应的编译命令
+          if [ "${{ matrix.compiler }}" = "gcc" ]; then
+            # GCC 编译命令：
+            # g++: GCC 的 C++ 编译器
+            # run.cpp: 要编译的源文件（根目录下）
+            # -o: 指定输出的可执行文件名称，格式：run_linux_编译器名
+            # -std=c++14: 强制使用 C++14 标准（满足需求）
+            # -O2: 开启 O2 优化（提升程序运行效率）
+            # -Wall: 开启所有基础警告（便于发现代码问题）
+            g++ run.cpp -o run_linux_${{ matrix.compiler }} -std=c++14 -O2 -Wall
+          else
+            # Clang 编译命令：参数和 GCC 完全一致，仅编译器命令不同
+            clang++ run.cpp -o run_linux_${{ matrix.compiler }} -std=c++14 -O2 -Wall
+          fi
+        # 作用：生成 Linux 可执行文件（run_linux_gcc / run_linux_clang）
+        # 编译失败则立即终止当前步骤，不继续后续流程
+        continue-on-error: false
+
+      # 步骤4：上传 Linux 可执行文件（便于下载到本地）
+      - name: Step 4 - Upload Linux executable files
+        # 使用官方的上传产物动作，v4 是稳定版本
+        uses: actions/upload-artifact@v4
+        with:
+          # 上传产物的名称（在 Actions 页面显示）
+          name: linux-executables-${{ matrix.compiler }}
+          # 要上传的文件路径：根目录下的 run_linux_* 文件
+          path: run_linux_*
+          # 无文件时仅警告，不终止流程（防止编译失败导致上传报错）
+          if-no-files-found: warn
+        # 作用：将编译好的 Linux 可执行文件打包，供下载使用
+
+  # ---------- 任务2：Windows 平台编译（MSVC 生成 .exe） ----------
+  windows-build:
+    # 指定运行环境：最新版 Windows Server 系统
+    runs-on: windows-latest
+
+    # ========== Windows 任务步骤（按顺序执行） ==========
+    steps:
+      # 步骤1：检出仓库代码到 Windows 虚拟机
+      - name: Step 1 - Checkout repository code
+        uses: actions/checkout@v4
+        # 作用：和 Linux 任务一致，下载代码到本地
+
+      # 步骤2：配置 MSVC 编译器环境
+      - name: Step 2 - Setup MSVC development environment
+        # 使用第三方动作自动配置 MSVC 环境（Windows 编译必须）
+        uses: ilammy/msvc-dev-cmd@v1
+        # 作用：自动设置 MSVC 的环境变量、路径，无需手动配置
+
+      # 步骤3：使用 MSVC 编译 run.cpp 生成 .exe
+      - name: Step 3 - Compile run.cpp to run_windows.exe (MSVC)
+        # Windows 使用 PowerShell 执行命令
+        shell: pwsh
+        run: |
+          # MSVC 编译器命令：cl.exe
+          # /EHsc: 启用 C++ 异常处理（必须，否则编译报错）
+          # /std:c++14: 指定 C++14 标准
+          # /O2: 开启 O2 优化（和 Linux 一致）
+          # /W3: 开启中等级别警告（类似 GCC 的 -Wall）
+          # /Fe: 指定输出文件名称（run_windows.exe）
+          # run.cpp: 要编译的源文件
+          cl.exe /EHsc /std:c++14 /O2 /W3 /Fe:run_windows.exe run.cpp
+        # 作用：生成 Windows 可执行文件 run_windows.exe
+        continue-on-error: false
+
+      # 步骤4：上传 Windows .exe 文件
+      - name: Step 4 - Upload Windows executable (.exe)
+        uses: actions/upload-artifact@v4
+        with:
+          # 产物名称：区分 Linux 产物
+          name: windows-executable-exe
+          # 要上传的文件：根目录下的 run_windows.exe
+          path: run_windows.exe
+          # 无文件时警告
+          if-no-files-found: warn
+        # 作用：打包 .exe 文件，供 Windows 系统下载运行
+# by 豆包AI
