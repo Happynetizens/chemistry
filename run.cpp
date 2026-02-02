@@ -1,99 +1,133 @@
-#include <iostream>
-#include <string>
-#include <vector>
-#include <algorithm>
-using std::vector;
-using std::string;
-struct element{		// 元素
-	const short x;		// 原子序数（质子数）
-	const string name;		// 元素名称
-	const string sign;		// 元素符号
-	const short s;		// 金属活跃度（排序）
-	int eqn;		// 方程式（链式前向星）
-};
-struct equation{		// 反应方程式
-	vector<short> reactants;		// 反应物
-	// vector<string> conditions;		// 反应条件
-	vector<short> products;		// 生成物
-	int nxt;		// 链式前向星
-};
-element elements[]={{},
-	{1, 	"氢", 	"H", 	10},
-	{2, 	"氦", 	"He", 	0},
-	{3, 	"锂", 	"Li", 	15},
-	{4, 	"铍", 	"Be", 	14},
-	{5, 	"硼", 	"B", 	0},
-	{6, 	"碳", 	"C", 	0},
-	{7, 	"氮", 	"N", 	0},
-	{8, 	"氧", 	"O", 	0},
-	{9, 	"氟", 	"F", 	0},
-	{10, 	"氖", 	"Ne", 	0},
-	{11, 	"钠", 	"Na", 	20},
-	{12, 	"镁", 	"Mg", 	19},
-	{13, 	"铝", 	"Al", 	18},
-	{14, 	"硅", 	"Si", 	0},
-	{15, 	"磷", 	"P", 	0},
-	{16, 	"硫", 	"S", 	0},
-	{17, 	"氯", 	"Cl", 	0},
-	{18, 	"氩", 	"Ar", 	0},
-	{19, 	"钾", 	"K", 	21},
-	{20, 	"钙", 	"Ca", 	17},
-	{26, 	"铁", 	"Fe", 	16},
-	{29, 	"铜", 	"Cu", 	13},
-	{30, 	"锌", 	"Zn", 	15},
-	{47, 	"银", 	"Ag", 	12},
-	{56, 	"钡", 	"Ba", 	11},
-	{63, 	"汞", 	"Hg", 	9},
-	{78, 	"铂", 	"Pt", 	8},
-	{79, 	"金", 	"Au", 	7},
-	{80, 	"锡", 	"Sn", 	14},
-	{82, 	"铅", 	"Pb", 	8}
-};
-vector<string> list;		// 原方程式
-vector<equation> equations={{/*post 0 is empty*/}};
-inline int getPost(short &target) {
-    int left=0, right=sizeof(elements)/sizeof(elements[0])-1, mid;
-    while (left<=right){
-        mid=(left+right)>>1;
-        if(elements[mid].x==target) return mid;
-        else if(elements[mid].x>target) right=mid-1;
-        else left=mid+1;
-    }
-    return 0;		// Err
-}
-inline int getX(string &name){
-	for(int i=1; i<sizeof(elements)/sizeof(elements[0]); ++i) if(elements[i].name==name) return elements[i].x;
-	return 0;		// Err
-}
-inline short get_element(string &eqn, short start, vector<short> &output){
-	short i=start;
-	for(string temp; eqn[i] && eqn[i]!='='; ++i){		// 目前是读原子，后续要改为分子......
-		if(isupper(eqn[i]) && isupper(eqn[i+1])) temp=eqn[i];
-		else temp=eqn[i]+eqn[i+1];		// Err......
-		output.push_back(getX(temp));
+#include<iostream>
+#include<vector>
+#include<string>
+#include<cstdlib>
+#include<algorithm>
+using std::vector, std::cin, std::cout, std::string, std::unique, std::sort;
+struct Graph{
+	vector<vector<int>> head;
+	inline void setSize(int n){
+		head.resize(n);
 	}
-	output.erase(std::unique(output.begin(), output.end()), output.end());
-	return i+1;		// 末尾下标+1
+	inline void addEdge(int u, int v){
+		head.at(u).push_back(v);
+	}
+	inline void unique(int size){
+		for(auto &e: head){
+			vector<bool> fy(size, false);
+			for(int i=0; i<e.size(); ++i){
+				if(fy.at(e.at(i))){
+					e.at(i)=e.at(e.size()-1);
+					e.pop_back();
+					--i;
+					continue;
+				}
+				fy.at(e.at(i))=true;
+			}
+		}
+	}
+} forward_graph, reverse_graph, peer_graph, forward_edge, reverse_edge, peer_edge;
+vector<string> map, answer, source;
+inline int checkOrdinal(string target){
+	int left=0, right=map.size()-1, middle;
+	while(left<=right){
+		middle=(left+right)>>1;
+		if(target<map.at(middle)) right=middle-1;
+		else if(map.at(middle)<target) left=middle+1;
+		else return middle;
+	}
+	return -1;
 }
-inline void add(short &react, int &eqn, vector<short> &prods, vector<short> &reacts){		// 链式前向星_add
-	int post=elements[getPost(react)].eqn;
-	equations.push_back({reacts, prods, post});
-	elements[getPost(react)].eqn=equations.size()-1;
-}
-inline void init(){		// 存图（library to list && list to data）
-    freopen("./library.txt", "r", stdin);
-	string temp;
-    while(std::cin>>temp) list.push_back(temp);
-    list.erase(std::unique(list.begin(), list.end()), list.end());		// deep unique......
+inline void loadData(){
+	freopen("./data.txt", "r", stdin);
+	string orgin;
+	while(cin>>orgin){
+		source.push_back(orgin);
+		for(int i=0, t; i<orgin.size(); ++i){
+			t=orgin.find_first_of("-+", i);
+			if(t==string::npos) t=orgin.size();
+			map.push_back(string(orgin.begin()+i, orgin.begin()+t));
+			i=t;
+		}
+	}
+	sort(map.begin(), map.end());
+	map.erase(unique(map.begin(), map.end()), map.end());
+	forward_edge.setSize(map.size());
+	reverse_edge.setSize(map.size());
+	peer_edge.setSize(map.size());
+	for(auto &e: source){
+		vector<int> reactant, product;
+		for(int i=0, t; i<e.find('-', 0); ++i){
+			t=e.find_first_of("+-", i);
+			reactant.push_back(checkOrdinal(e.substr(i, t-i)));
+			i=t;
+		}
+		for(int i=e.find('-', 0)+1, t; i<e.size(); ++i){
+			t=e.find('+', i);
+			if(t==string::npos) t=e.size();
+			product.push_back(checkOrdinal(e.substr(i, t-i)));
+			i=t;
+		}
+		for(auto &i: reactant){
+			for(auto &j: product){
+				forward_edge.addEdge(i, j);
+				reverse_edge.addEdge(j, i);
+			}
+			for(auto &j: reactant){
+				if(i==j) continue;
+				peer_edge.addEdge(i, j);
+				peer_edge.addEdge(j, i);
+			}
+		}
+		forward_edge.unique(map.size());
+		reverse_edge.unique(map.size());
+		peer_edge.unique(map.size());
+	}
 	fclose(stdin);
-	for(int i=0; i<list.size(); ++i){
-		vector<short> reacts;		// 反应物
-		vector<short> prods;		// 生成物
-		get_element(list[i], get_element(list[i], 0, reacts), prods);
-		for(auto p: reacts) add(p, i, prods, reacts);
+}
+inline void inputGraph(){
+	int n, u, v;
+	string t;
+	cout<<"the number of nodes:";
+	cin>>n;
+	forward_graph.setSize(n);
+	reverse_graph.setSize(n);
+	peer_graph.setSize(n);
+	answer.resize(n, "");
+	cout<<"the number of directed edges:";
+	cin>>n;
+	for(int i=1; i<=n; ++i){
+		cout<<"new directed edge:";
+		cin>>u>>v;
+		forward_graph.addEdge(u-1, v-1);
+		reverse_graph.addEdge(v-1, u-1);
 	}
+	cout<<"the number of undirected edges:";
+	cin>>n;
+	for(int i=1; i<=n; ++i){
+		cout<<"new undirected edge:";
+		cin>>u>>v;
+		peer_graph.addEdge(u-1, v-1);
+		peer_graph.addEdge(v-1, u-1);
+	}
+	cout<<"the number of conditions";
+	cin>>n;
+	for(int i=0; i<n; ++i){
+		cout<<"new condition:";
+		cin>>u>>t;
+		answer.at(u)=t;
+	}
+}
+inline void outputAnswer(){
+	// system("chcp 65001 > nul");
+
+}
+void dfs(int post=0){
+
 }
 int main(){
-	// loading......
+	loadData();
+	inputGraph();
+	dfs();
 	return 0;
 }
